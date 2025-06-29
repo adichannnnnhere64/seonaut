@@ -12,7 +12,7 @@ services:
     networks:
     - seonaut_network
 
-  app:
+  seonaut-app:
     build: .
     container_name: "SEOnaut-app"
     depends_on:
