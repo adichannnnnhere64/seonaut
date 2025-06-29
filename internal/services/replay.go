@@ -26,6 +26,7 @@ func (r *ReplayService) RewriteHTML(htmlContent []byte, rewriteFunc rewriteURL) 
 		return nil, err
 	}
 
+	// Rewrite the URLs in the specified element and attribute.
 	for _, xpath := range []struct {
 		xpath, attr string
 	}{
@@ -70,6 +71,41 @@ func (r *ReplayService) RewriteHTML(htmlContent []byte, rewriteFunc rewriteURL) 
 				if attr.Key == "style" {
 					inlineStyleElement.Attr[i].Val = r.RewriteCSS(attr.Val, rewriteFunc)
 				}
+			}
+		}
+	}
+
+	// Rewrite URLs in srcset tags of image and picture source elements.
+	// The srcset can have multiple URLs with optional descriptors.
+	// ex. <img src="header640.png 640w, header960.png 960w">
+	srcsets, err := htmlquery.QueryAll(doc, "//img[@srcset] | //picture/source[@srcset]")
+	if err != nil {
+		log.Printf("error getting all srcset elements %v", err)
+	}
+
+	for _, srcset := range srcsets {
+		rewrittenParts := []string{}
+		urlset := htmlquery.SelectAttr(srcset, "srcset")
+		urlset = strings.Trim(urlset, ",")
+		parts := strings.Split(urlset, ", ")
+
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+
+			pp := strings.SplitN(p, " ", 2)
+			rewrittenURL := rewriteFunc(pp[0])
+			if len(pp) > 1 {
+				rewrittenURL += " " + pp[1]
+			}
+			rewrittenParts = append(rewrittenParts, rewrittenURL)
+		}
+
+		for i := range srcset.Attr {
+			if srcset.Attr[i].Key == "srcset" {
+				srcset.Attr[i].Val = strings.Join(rewrittenParts, ", ")
 			}
 		}
 	}
